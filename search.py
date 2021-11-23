@@ -1,7 +1,10 @@
 import json
 import warnings
+import re
 
 from elasticsearch import Elasticsearch
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 warnings.simplefilter("ignore")
 
@@ -17,6 +20,46 @@ def connect_elasticsearch():
 
 
 es = connect_elasticsearch()
+
+
+def intent_classifier(search_term):
+
+    similar_count = {'most_reign': 0, 'less_reign': 0}
+
+    keyword_most = ["වැඩිම", "වැඩි", "දීර්ඝ", "දීර්ඝම", "දිගම", "දිග"]
+    keyword_less = ["අඩුම", "අඩු", "පොඩිම", "පොඩි", "කුඩාම", "කුඩා"]
+    keyword_reign = ["රජ", "රජු", "රජකම්", "රජවරු", "රජ්ජු", "පාලනය", "පාලක", "පාලකයා", "කාලයක්", "කාලය", "කල්"]
+    count = int(re.search(r"\d+", search_term).group(0))
+
+    search_term_list = search_term.split()
+
+    for key in similar_count.keys():
+        similar_weight = 0
+        for j in search_term_list:
+            documents = [j]
+
+            if key == 'most_reign':
+                documents.extend(keyword_most)
+            else:
+                documents.extend(keyword_less)
+
+            documents.extend(keyword_reign)
+            tfidf_vectorizer = TfidfVectorizer(analyzer="char", token_pattern=u'(?u)\\b\w+\\b')
+            tfidf_matrix = tfidf_vectorizer.fit_transform(documents)
+
+            cs = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix)
+            similarity_list = cs[0][1:]
+
+            for i in similarity_list:
+                if i > 0.8:
+                    similar_weight += i
+
+        similar_count[key] = similar_weight
+
+    if similar_count['most_reign'] > similar_count['less_reign'] and similar_count['most_reign'] > 0:
+        search_all('longest', count)
+    elif similar_count['most_reign'] < similar_count['less_reign'] and similar_count['less_reign'] > 0:
+        search_all('shortest', count)
 
 
 def text_processing(text):
@@ -54,7 +97,7 @@ def query_search(index_name, search_obj):
         print('No match found!')
 
 
-def sorted_query_search(index_name, search_obj, order):
+def sorted_query_search(index_name, search_obj, order, count):
     res = es.search(index=index_name, body=search_obj)
     # print(res)
     bc_list = []
@@ -67,7 +110,8 @@ def sorted_query_search(index_name, search_obj, order):
                 bc_list.append(i)
             if i['reign_start'].split(' ')[1] == 'AD':
                 ad_list.append(i)
-            if (i['reign_start'].split(' ')[1] == 'BC' and i['reign_end'].split(' ')[1] == 'BC') or (i['reign_start'].split(' ')[1] == 'AD' and i['reign_end'].split(' ')[1] == 'AD'):
+            if (i['reign_start'].split(' ')[1] == 'BC' and i['reign_end'].split(' ')[1] == 'BC') or (
+                    i['reign_start'].split(' ')[1] == 'AD' and i['reign_end'].split(' ')[1] == 'AD'):
                 i['reign_length'] = abs(int(i['reign_start'].split(' ')[0]) - int(i['reign_end'].split(' ')[0]))
                 if i['reign_length'] < 100:
                     length_list.append(i)
@@ -86,10 +130,12 @@ def sorted_query_search(index_name, search_obj, order):
             for k in sorted(bc_list, key=lambda d: int(d['reign_start'].split(' ')[0])):
                 print(k)
         if order == 'longest':
-            for k in sorted(length_list, key=lambda d: d['reign_length'], reverse=True):
+            sorted_length_list = sorted(length_list, key=lambda d: d['reign_length'], reverse=True)
+            for k in sorted_length_list[:count]:
                 print(k)
         if order == 'shortest':
-            for k in sorted(length_list, key=lambda d: d['reign_length']):
+            sorted_length_list = sorted(length_list, key=lambda d: d['reign_length'])
+            for k in sorted_length_list[:count]:
                 print(k)
     else:
         print('No match found!')
@@ -133,11 +179,11 @@ def range_search(index_name, search_obj, range_type, start_year, end_year):
             print('No match found!')
 
 
-def search_all(order):
+def search_all(order, count=171):
     print('Sri Lankan kings')
     if es is not None:
         search_object = {"size": 200, 'query': {'match_all': {}}}
-        sorted_query_search('kings', json.dumps(search_object), order)
+        sorted_query_search('kings', json.dumps(search_object), order, count)
 
 
 def search_by_name(name):
@@ -228,7 +274,7 @@ def multi_field_search(name, clan, kingdom, relationship):
 
 
 def search_by_range(start, end):
-    print('Kings who reigned the Sri Lanka in', start, '-', end, 'time period.')
+    print('Kings who reigned the Sri Lanka in given time period.')
     if es is not None:
         start_year, start_timeline = start.split(' ')
         end_year, end_timeline = end.split(' ')
@@ -240,7 +286,7 @@ def search_by_range(start, end):
                 }
             }
         }
-        if start_timeline == 'AD' and end_timeline == 'AD':
+        if start_timeline.upper() == 'AD' and end_timeline.upper() == 'AD':
             search_object['query']['bool']['filter'].append({
                 "match": {
                     "reign_start": 'AD'
@@ -252,7 +298,7 @@ def search_by_range(start, end):
                 }
             })
             range_search('kings', json.dumps(search_object), 'AA', int(start_year), int(end_year))
-        elif start_timeline == 'BC' and end_timeline == 'BC':
+        elif start_timeline.upper() == 'BC' and end_timeline.upper() == 'BC':
             search_object['query']['bool']['filter'].append({
                 "match": {
                     "reign_start": 'BC'
@@ -264,7 +310,7 @@ def search_by_range(start, end):
                 }
             })
             range_search('kings', json.dumps(search_object), 'BB', int(start_year), int(end_year))
-        elif start_timeline == 'BC' and end_timeline == 'AD':
+        elif start_timeline.upper() == 'BC' and end_timeline.upper() == 'AD':
             search_object_bb = {
                 "size": 200,
                 "query": {
@@ -332,7 +378,7 @@ if __name__ == '__main__':
         print(
             'search_by_name: 1 \nsearch_by_clan: 2 \nsearch_by_kingdom: 3 \nsearch_by_predecessor_relation: 4 \n'
             'search_by_reign_details: 5 \nsearch_by_fulltext: 6 \nmultiple_field_search: 7 \n'
-            'range_search_by_reign_years: 8 \nRetrieve all: 9')
+            'range_search_by_reign_years: 8 \nRetrieve all: 9 \n Intent classifier: 10')
         option = input('Search option:').strip()
         if option == '1':
             print('Insert your search text')
@@ -396,10 +442,14 @@ if __name__ == '__main__':
 
         elif option == '8':
             print('Insert the year range \n[example - Start year: 123 AD/BC, End year: 123 AD/BC]')
-            start_year = input('Start year:').strip()
-            end_year = input('End year:').strip()
+            start_year = input('Start year:').strip().upper()
+            if len(start_year) == 0:
+                start_year = '600 BC'
+            end_year = input('End year:').strip().upper()
+            if len(end_year) == 0:
+                end_year = '1900 AD'
             if len(start_year.split()) < 2 and len(end_year.split()) < 2:
-                print('Inavlid input!')
+                print('Invalid input!')
             else:
                 search_by_range(start_year, end_year)
 
@@ -416,6 +466,11 @@ if __name__ == '__main__':
                 search_all('shortest')
             else:
                 print('Invalid preference!')
+
+        elif option == '10':
+            print('Insert your search text')
+            input_text = input('Input text:').strip()
+            intent_classifier(input_text)
         else:
             print('Invalid input!')
 
