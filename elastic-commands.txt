@@ -1,0 +1,18 @@
+#Create and index name kings
+http://localhost:9200/kings
+
+#logstash and insert data into the elasticsearch index kings
+/usr/share/logstash/bin/logstash -f sl-kings.conf
+
+Sample inputs
+
+    # search_by_name('තිස්ස')
+    # search_by_clan('ලම්බකර්ණ')
+    # search_by_kingdom('අනුරාධපුර රාජධානිය')
+    # search_by_relation('රජුගේ වැඩිමහල්ම')
+    # search_by_details('විජය රාජවංශය, අනුරාධපුර රාජධානිය')
+    # search_by_fulltext('තිස්ස ලම්බකර්ණ අනුරාධපුර රාජධානිය වැඩිමහල්ම ')
+    # multi_field_search('තිස්ස', 'ලම්බකර්ණ', 'අනුරාධපුර', 'සොහොයුරායි')
+    # search_by_range('100 AD', '300 AD')
+    # search_by_range('200 BC', '50 BC')
+    # search_by_range('50 BC', '100 AD')
