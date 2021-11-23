@@ -22,16 +22,44 @@ def connect_elasticsearch():
 es = connect_elasticsearch()
 
 
-def intent_classifier(search_term):
+def regex_match(word, word_list):
+    reg = re.compile(word)
+    count = 0
+    for w in word_list:
+        if bool(re.match(reg, w)):
+            count += 1
+    for w in word_list:
+        regw = re.compile(w)
+        if bool(re.match(regw, word)):
+            count += 1
+    if count > 0:
+        return True
+    else:
+        return False
 
-    similar_count = {'most_reign': 0, 'less_reign': 0}
+
+def intent_classifier(search_term):
+    similar_count = {'most_reign': 0, 'less_reign': 0, 'first_reign': 0, 'last_reign': 0}
 
     keyword_most = ["වැඩිම", "වැඩි", "දීර්ඝ", "දීර්ඝම", "දිගම", "දිග"]
     keyword_less = ["අඩුම", "අඩු", "පොඩිම", "පොඩි", "කුඩාම", "කුඩා"]
     keyword_reign = ["රජ", "රජු", "රජකම්", "රජවරු", "රජ්ජු", "පාලනය", "පාලක", "පාලකයා", "කාලයක්", "කාලය", "කල්"]
-    count = int(re.search(r"\d+", search_term).group(0))
-
+    keyword_first = ["මුල්", "මුල", "මුල්ම", "මුලම", "පලමු", "පලමුවන", "ප්‍රතම", "මුලින්ම"]
+    keyword_last = ["අවසාන", "අවසන්", "අන්තිම", " අන්තිමටම", " අවසානයටම", " අවසානයට"]
+    keyword_clan = ["විජය ", "ලම්බකර්ණ", " ද්‍රවිඩයින්", " ද්‍රවිඩ", "මෝරිය", "චෝළ", "විජයබාහු", "කාලිංග", "සිරි",
+                    "දිනරාජ", "නායක්කර්"]
+    keyword_kingdom = ["උපතිස්ස", "අනුරාධපුර", "පොළොන්නරු", "දඹදෙණිය", "ගම්පොළ", "කෝට්ටේ", "සීතාවක", "මහනුවර"]
+    try:
+        count = int(re.search(r"\d+", search_term).group(0))
+    except:
+        count = 1
     search_term_list = search_term.split()
+    # clan_words = [word for word in search_term_list if word.lower() in keyword_clan]
+    clan_words = [word for word in keyword_clan if regex_match(word, search_term_list)]
+    # kingdom_words = [word for word in search_term_list if word.lower() in keyword_kingdom]
+    kingdom_words = [word for word in keyword_kingdom if regex_match(word, search_term_list)]
+    clan_input = ' '.join(clan_words)
+    kingdom_input = ' '.join(kingdom_words)
 
     for key in similar_count.keys():
         similar_weight = 0
@@ -40,8 +68,12 @@ def intent_classifier(search_term):
 
             if key == 'most_reign':
                 documents.extend(keyword_most)
-            else:
+            elif key == 'less_reign':
                 documents.extend(keyword_less)
+            elif key == 'first_reign':
+                documents.extend(keyword_first)
+            elif key == 'last_reign':
+                documents.extend(keyword_last)
 
             documents.extend(keyword_reign)
             tfidf_vectorizer = TfidfVectorizer(analyzer="char", token_pattern=u'(?u)\\b\w+\\b')
@@ -55,11 +87,18 @@ def intent_classifier(search_term):
                     similar_weight += i
 
         similar_count[key] = similar_weight
-
-    if similar_count['most_reign'] > similar_count['less_reign'] and similar_count['most_reign'] > 0:
-        search_all('longest', count)
-    elif similar_count['most_reign'] < similar_count['less_reign'] and similar_count['less_reign'] > 0:
-        search_all('shortest', count)
+    sorted_similar_count = sorted(similar_count.items(), key=lambda d: d[1], reverse=True)
+    if abs(sorted_similar_count[0][1] - sorted_similar_count[1][1]) > 0.11 and sorted_similar_count[0][1] > 0:
+        if sorted_similar_count[0][0] == 'most_reign':
+            intent_search(clan_input, kingdom_input, 'longest', count)
+        elif sorted_similar_count[0][0] == 'less_reign':
+            intent_search(clan_input, kingdom_input, 'shortest', count)
+        elif sorted_similar_count[0][0] == 'first_reign':
+            intent_search(clan_input, kingdom_input, 'oldest', count)
+        elif sorted_similar_count[0][0] == 'last_reign':
+            intent_search(clan_input, kingdom_input, 'recent', count)
+    else:
+        print("Cannot classify the meaning of the text!")
 
 
 def text_processing(text):
@@ -103,9 +142,10 @@ def sorted_query_search(index_name, search_obj, order, count):
     bc_list = []
     ad_list = []
     length_list = []
+    if count > len(result_text_processing(res['hits']['hits'])):
+        count = len(result_text_processing(res['hits']['hits']))
     if len(result_text_processing(res['hits']['hits'])) > 0:
         for i in result_text_processing(res['hits']['hits']):
-            # if len(i['reign_start'].split(' ')) > 1 and len(i['reign_end'].split(' ')) > 1:
             if i['reign_start'].split(' ')[1] == 'BC':
                 bc_list.append(i)
             if i['reign_start'].split(' ')[1] == 'AD':
@@ -120,14 +160,14 @@ def sorted_query_search(index_name, search_obj, order, count):
                 if i['reign_length'] < 100:
                     length_list.append(i)
         if order == 'oldest':
-            for k in sorted(bc_list, key=lambda d: int(d['reign_start'].split(' ')[0]), reverse=True):
-                print(k)
-            for k in sorted(ad_list, key=lambda d: int(d['reign_start'].split(' ')[0])):
+            final_list = sorted(bc_list, key=lambda d: int(d['reign_start'].split(' ')[0]), reverse=True) + sorted(
+                ad_list, key=lambda d: int(d['reign_start'].split(' ')[0]))
+            for k in final_list[:count]:
                 print(k)
         if order == 'recent':
-            for k in sorted(ad_list, key=lambda d: int(d['reign_start'].split(' ')[0]), reverse=True):
-                print(k)
-            for k in sorted(bc_list, key=lambda d: int(d['reign_start'].split(' ')[0])):
+            final_list = sorted(ad_list, key=lambda d: int(d['reign_start'].split(' ')[0]), reverse=True) + sorted(
+                bc_list, key=lambda d: int(d['reign_start'].split(' ')[0]))
+            for k in final_list[:count]:
                 print(k)
         if order == 'longest':
             sorted_length_list = sorted(length_list, key=lambda d: d['reign_length'], reverse=True)
@@ -183,6 +223,32 @@ def search_all(order, count=171):
     print('Sri Lankan kings')
     if es is not None:
         search_object = {"size": 200, 'query': {'match_all': {}}}
+        sorted_query_search('kings', json.dumps(search_object), order, count)
+
+
+def intent_search(clan, kingdom, order, count=171):
+    print('Sri Lankan kings')
+    if es is not None:
+        search_object = {
+            "size": 200,
+            "query": {
+                "bool": {
+                    "must": []
+                }
+            }
+        }
+        if clan is not None and len(clan) > 0:
+            search_object['query']['bool']['must'].append({
+                "match": {
+                    "clan": str(clan)
+                }
+            })
+        if kingdom is not None and len(kingdom) > 0:
+            search_object['query']['bool']['must'].append({
+                "match": {
+                    "kingdom": str(kingdom)
+                }
+            })
         sorted_query_search('kings', json.dumps(search_object), order, count)
 
 
@@ -378,7 +444,7 @@ if __name__ == '__main__':
         print(
             'search_by_name: 1 \nsearch_by_clan: 2 \nsearch_by_kingdom: 3 \nsearch_by_predecessor_relation: 4 \n'
             'search_by_reign_details: 5 \nsearch_by_fulltext: 6 \nmultiple_field_search: 7 \n'
-            'range_search_by_reign_years: 8 \nRetrieve all: 9 \n Intent classifier: 10')
+            'range_search_by_reign_years: 8 \nRetrieve all: 9 \nIntent classifier: 10')
         option = input('Search option:').strip()
         if option == '1':
             print('Insert your search text')
