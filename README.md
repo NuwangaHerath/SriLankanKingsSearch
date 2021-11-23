@@ -46,6 +46,10 @@ Search system supports for the following queries,
 - Multi field search (ex: [‘name’ : 'තිස්ස',  ‘clan’ : 'ලම්බකර්ණ',  ‘kingdom’ : 'අනුරාධපුර', ‘predecessor_relation’ : 'රජුගේ වැඩිමහල්ම සොහොයුරායි'])
 
 ## Advanced Features
+Intent classification
+- Extract the intention of the search text and show relevant results
+(‘අඩුම කාලයක් පාලනය කල රජවරු 50’ will return the list of 50 kings who has the shortest reign period.)
+
 Faceted search
 - Search by a specific field
 - Search by multiple fields
