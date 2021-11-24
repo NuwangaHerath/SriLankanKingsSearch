@@ -1,5 +1,5 @@
 # SriLankan Kings Search
-This repository contains the source code for the Sri Lankan Kings seaech engine which is implemented using Elasticsearch and Python. 
+This repository contains the source code for the Sri Lankan Kings search engine which is implemented using Elasticsearch and Python. 
 
 ## File Structure
 ```
@@ -29,7 +29,7 @@ Simply run the `search.py` python script to start the search engine.
 python3 search.py
 ```
 ## Data Fields
-Dataset was scraped manually from Wikipedia page, which consited with details of history of Sri Lankan Kings. Each data record consist with following data fields.
+Dataset was scraped manually from Wikipedia page, which contained with details of history of Sri Lankan Kings. Each data record consist with following data fields.
 1. name (ex: මහා දුට්ඨගාමිණී අභය)
 2. clan (ex: විජය රාජවංශය)
 3. kingdom (ex: අනුරාධපුර රාජධානිය)
@@ -48,7 +48,7 @@ Search system supports for the following queries,
 ## Advanced Features
 Intent classification
 - Extract the intention of the search text and show relevant results
-(‘අඩුම කාලයක් පාලනය කල රජවරු 50’ will return the list of 50 kings who has the shortest reign period.)
+(‘අඩුම කාලයක් පාලනය කල රජවරු 50’ will return the list of 50 kings who have the shortest reign period.)
 
 Faceted search
 - Search by a specific field
